@@ -1,20 +1,44 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:LightPdf.App"
         x:Class="LightPdf.App.MainWindow"
         Title="LightPdf" Width="1000" Height="800"
         DragDrop.AllowDrop="True">
+    <Window.Styles>
+        <!-- Toolbar buttons never take focus, so Space/arrows keep scrolling the document. -->
+        <Style Selector="StackPanel#Toolbar > Button, StackPanel#Toolbar > ToggleButton">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="StackPanel#Toolbar > Separator">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Margin" Value="4,0" />
+        </Style>
+    </Window.Styles>
+
     <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="8">
-            <Button x:Name="OpenButton" Content="Open…" Click="OnOpenClick" />
-            <Button x:Name="PrevButton" Content="◀" Click="OnPrevClick" IsEnabled="False" />
-            <TextBlock x:Name="PageText" VerticalAlignment="Center" MinWidth="80" TextAlignment="Center" />
-            <Button x:Name="NextButton" Content="▶" Click="OnNextClick" IsEnabled="False" />
-            <TextBlock x:Name="StatusText" VerticalAlignment="Center" Opacity="0.7" />
+        <StackPanel x:Name="Toolbar" DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="8,6">
+            <Button Content="Open…" Click="OnOpenClick" ToolTip.Tip="Open (Ctrl+O)" />
+            <Separator />
+            <Button x:Name="PrevButton" Content="▲" Click="OnPrevClick" IsEnabled="False" ToolTip.Tip="Previous page" />
+            <TextBox x:Name="PageBox" Width="56" TextAlignment="Center" VerticalAlignment="Center"
+                     IsEnabled="False" ToolTip.Tip="Go to page (Ctrl+G)" />
+            <TextBlock x:Name="PageCountText" VerticalAlignment="Center" Text="/ 0" MinWidth="40" />
+            <Button x:Name="NextButton" Content="▼" Click="OnNextClick" IsEnabled="False" ToolTip.Tip="Next page" />
+            <Separator />
+            <Button Content="−" Click="OnZoomOutClick" ToolTip.Tip="Zoom out (Ctrl+−)" />
+            <TextBlock x:Name="ZoomText" VerticalAlignment="Center" MinWidth="48" TextAlignment="Center" Text="100%" />
+            <Button Content="+" Click="OnZoomInClick" ToolTip.Tip="Zoom in (Ctrl++)" />
+            <ToggleButton x:Name="FitWidthButton" Content="Fit width" Click="OnFitWidthClick" ToolTip.Tip="Fit width (Ctrl+2)" />
+            <ToggleButton x:Name="FitPageButton" Content="Fit page" Click="OnFitPageClick" ToolTip.Tip="Fit page (Ctrl+0)" />
+            <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="8,0" Opacity="0.7" />
         </StackPanel>
-        <ScrollViewer x:Name="Scroller" Background="#3a3a3a"
+
+        <ScrollViewer x:Name="Scroller" Background="#3a3a3a" Focusable="True" FocusAdorner="{x:Null}"
                       HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-            <Image x:Name="PageImage" Margin="16" Stretch="None"
-                   HorizontalAlignment="Center" VerticalAlignment="Top" />
+            <local:PdfPagesView x:Name="Pages" HorizontalAlignment="Center" VerticalAlignment="Top" />
         </ScrollViewer>
     </DockPanel>
 </Window>

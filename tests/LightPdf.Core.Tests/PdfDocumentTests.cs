@@ -61,6 +61,42 @@ public class PdfDocumentTests
     }
 
     [Fact]
+    public void Open_Encrypted_WithoutPassword_ThrowsPasswordError()
+    {
+        string path = TestPdf.WriteToTemp(userPassword: "secret");
+
+        var ex = Assert.Throws<PdfException>(() => PdfDocument.Open(path));
+        Assert.Equal(PdfiumError.Password, ex.Error);
+
+        var wrong = Assert.Throws<PdfException>(() => PdfDocument.Open(path, "nope"));
+        Assert.Equal(PdfiumError.Password, wrong.Error);
+    }
+
+    [Fact]
+    public void Open_Encrypted_WithPassword_RendersDecryptedContent()
+    {
+        using var doc = PdfDocument.Open(TestPdf.WriteToTemp(userPassword: "secret"), "secret");
+        const int w = 612, h = 792, stride = w * 4;
+        IntPtr buffer = Marshal.AllocHGlobal(stride * h);
+        try
+        {
+            doc.RenderPage(0, buffer, w, h, stride);
+            Assert.Equal(0xFF000000u, Pixel(buffer, stride, x: 200, y: 592)); // square decrypted and drawn
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    [Fact]
+    public void GetPageSizes_ReturnsAllPages()
+    {
+        using var doc = PdfDocument.Open(TestPdf.WriteToTemp(pageCount: 4));
+        Assert.Equal(Enumerable.Repeat(new PageSize(612, 792), 4), doc.GetPageSizes());
+    }
+
+    [Fact]
     public void GetPageSize_OutOfRange_Throws()
     {
         using var doc = PdfDocument.Open(TestPdf.WriteToTemp());

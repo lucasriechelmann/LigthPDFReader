@@ -72,6 +72,15 @@ Keeping `Core` free of UI types makes the engine testable, and lets us swap UI f
 - Page number box with "go to page", and Home/End/PgUp/PgDn keys
 - Password-protected PDFs: prompt and retry
 
+**M1 results (2026-11-23), done:**
+- `PdfWorker` (single PDFium thread, cancellable FIFO), `PageLayout` (O(log n) visibility), `Zoom` (steps, fit math), all unit-tested (37 tests, including RC4-encrypted PDFs generated in code)
+- `PdfPagesView`: virtualized continuous scroll, renders visible pages ±1 nearest-first, stretch-then-sharpen zoom (150 ms settle), 96 MB LRU cache
+- Shortcuts: Ctrl+wheel / Ctrl +/− zoom (anchored), Ctrl+0 fit page, Ctrl+1 100%, Ctrl+2 fit width, Ctrl+G go to page, Home/End, PgUp/PgDn/Space, ←/→ page
+- Password prompt with retry
+- AOT: ~265 ms to first page; 42.4 MB; memory ~115 MB at open, ~245 MB after paging 120 times through a 383-page manual
+- Bugs found in real-window testing: bitmaps tagged with DPI ≠ 96 were drawn magnified by the display scaling (fixed: bitmaps are 96 DPI and the dest rect sets the size); `PointerWheelChanged` is bubble-only (handled in the view itself); `ScrollViewer` isn't focusable by default
+- Follow-ups: tiled rendering above ~16 MP per page (very high zoom is soft); profile the ~130 MB of non-cache growth (GPU textures?) in M6; Ctrl+wheel not yet verified by hand
+
 ### M2: Tabs and file handling
 - Tabs (Ctrl+T/W, Ctrl+Tab, middle-click to close)
 - Drag-and-drop files onto the window, Ctrl+O

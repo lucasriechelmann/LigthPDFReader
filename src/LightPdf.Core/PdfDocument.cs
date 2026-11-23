@@ -44,6 +44,15 @@ public sealed class PdfDocument : IDisposable
         return new PageSize(size.Width, size.Height);
     }
 
+    /// <summary>All page sizes in points. Reads metadata only (no rendering), so it is fast even for large files.</summary>
+    public PageSize[] GetPageSizes()
+    {
+        var sizes = new PageSize[PageCount];
+        for (int i = 0; i < sizes.Length; i++)
+            sizes[i] = GetPageSize(i);
+        return sizes;
+    }
+
     /// <summary>
     /// Renders a page into caller-owned BGRA (premultiplied, opaque) memory, scaled to
     /// <paramref name="width"/> x <paramref name="height"/> pixels. No intermediate copy.
