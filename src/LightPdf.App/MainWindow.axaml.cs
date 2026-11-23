@@ -23,7 +23,7 @@ public partial class MainWindow : Window
     public MainWindow(StartupOptions options)
     {
         _options = options;
-        _recent = options.Bench ? new RecentFilesStore(null) : RecentFilesStore.CreateDefault();
+        _recent = options.Automated ? new RecentFilesStore(null) : RecentFilesStore.CreateDefault();
         _recent.Load();
 
         InitializeComponent();
@@ -40,8 +40,11 @@ public partial class MainWindow : Window
         base.OnOpened(e);
         if (_options.FilePaths.Count > 0)
             await OpenFilesAsync(_options.FilePaths);
-        else if (_options.Bench)
+        else if (_options.Automated)
             Close();
+
+        if (_options.PrintToPdfPath is { } output && ActiveTab is not null)
+            await PrintToPdfAndExitAsync(output);
     }
 
     // ---------------------------------------------------------------- tabs
@@ -93,7 +96,7 @@ public partial class MainWindow : Window
     private void CloseTab(TabItem item)
     {
         if (item.Content is not DocumentTab tab) return;
-        if (!_options.Bench)
+        if (!_options.Automated)
         {
             _recent.Touch(tab.FilePath, tab.Pages.GetViewState());
             _recent.Save();
@@ -173,7 +176,7 @@ public partial class MainWindow : Window
 
                 ViewState? lastView = _recent.Find(path)?.View;
                 AddTab(new DocumentTab(_worker, document, sizes, lastView));
-                if (!_options.Bench)
+                if (!_options.Automated)
                 {
                     _recent.Touch(path);
                     _recent.Save();
@@ -182,7 +185,7 @@ public partial class MainWindow : Window
                 StatusText.Text = "";
                 return;
             }
-            catch (PdfException ex) when (ex.Error == PdfiumError.Password && !_options.Bench)
+            catch (PdfException ex) when (ex.Error == PdfiumError.Password && !_options.Automated)
             {
                 password = await PasswordDialog.AskAsync(this, Path.GetFileName(path), retry: password is not null);
                 if (password is null) return; // cancelled
@@ -190,13 +193,13 @@ public partial class MainWindow : Window
             catch (PdfException ex)
             {
                 StatusText.Text = ex.Message;
-                if (ex.Error == PdfiumError.File && !_options.Bench)
+                if (ex.Error == PdfiumError.File && !_options.Automated)
                 {
                     _recent.Remove(path); // gone or unreadable: don't keep offering it
                     _recent.Save();
                     RefreshRecent();
                 }
-                if (_options.Bench) { Console.Error.WriteLine(ex.Message); Close(); }
+                if (_options.Automated) { Console.Error.WriteLine(ex.Message); Close(); }
                 return;
             }
         }
@@ -303,6 +306,7 @@ public partial class MainWindow : Window
         ZoomText.Text = hasDoc ? $"{pages!.Zoom * 100:0}%" : "";
         FitWidthButton.IsChecked = hasDoc && pages!.ZoomMode == ZoomMode.FitWidth;
         FitPageButton.IsChecked = hasDoc && pages!.ZoomMode == ZoomMode.FitPage;
+        PrintButton.IsEnabled = hasDoc && !IsPrinting;
     }
 
     private void OnPrevClick(object? sender, RoutedEventArgs e) => ActiveTab?.Pages.GoToPage(ActiveTab.Pages.CurrentPage - 1);
@@ -355,6 +359,7 @@ public partial class MainWindow : Window
         switch (e.Key)
         {
             case Key.F when tab is not null: ShowSearchBar(); break;
+            case Key.P when tab is not null: await PrintActiveTabAsync(); break;
             // In a text box, Ctrl+C / Ctrl+A keep their usual meaning.
             case Key.C when !inTextBox: await CopySelectionAsync(); break;
             case Key.A when !inTextBox: tab?.Pages.SelectAllOnPage(); break;
@@ -420,7 +425,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
-        if (!_options.Bench)
+        if (!_options.Automated)
         {
             // Save every open tab's position; the active tab ends up on top of the recent list.
             foreach (var item in TabItems.Reverse().OrderBy(t => ReferenceEquals(t, Tabs.SelectedItem)))

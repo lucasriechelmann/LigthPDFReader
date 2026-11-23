@@ -83,6 +83,20 @@ public sealed class PdfDocument : IDisposable
         }
     }
 
+    /// <summary>
+    /// Prints a page onto a printer device context (between StartPage and EndPage) as vector output,
+    /// at the position and rotation from <see cref="PrintLayout.Place"/>.
+    /// </summary>
+    public void PrintPage(int pageIndex, IntPtr printerDc, PrintPlacement placement)
+    {
+        CheckPage(pageIndex);
+        using var page = PdfiumNative.FPDF_LoadPage(_handle, pageIndex);
+        if (page.IsInvalid)
+            throw PdfException.FromLastError($"Cannot load page {pageIndex + 1}");
+        PdfiumNative.FPDF_RenderPage(printerDc, page, placement.X, placement.Y, placement.Width, placement.Height,
+            placement.Rotate, PdfiumNative.RenderAnnotations | PdfiumNative.RenderPrinting);
+    }
+
     /// <summary>Extracts a page's text and per-character boxes (normalized, rotation applied).</summary>
     public unsafe PageText GetPageText(int pageIndex)
     {

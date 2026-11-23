@@ -115,6 +115,16 @@ Keeping `Core` free of UI types makes the engine testable, and lets us swap UI f
 - Win32 print dialog (printer, page range, copies)
 - Render each page to the printer HDC at printer DPI with `FPDF_RenderPage`, fit to paper
 
+**M4 results (2026-11-23), done:**
+- `PrintDlgEx` (on this Windows 11 build it shows the modern system print dialog): printer, orientation, all / current / custom page ranges, copies and collation through the driver
+- GDI job on the PDFium worker, one work item per page: `FPDF_RenderPage(HDC)` with `FPDF_PRINTING` sends vector output (a 1-page text print = 4 KB)
+- `PrintLayout` (Core, 8 tests): actual size centered on the sheet; shrinks (never enlarges) pages larger than the printable area; landscape pages auto-rotate onto portrait paper
+- Print… button, Ctrl+P, "Printing page n of N…" progress, Cancel printing (aborts the job)
+- `--print-to-pdf out.pdf` prints the whole document through Microsoft Print to PDF without a dialog, for automated checks (no paper used)
+- Verified: 49-page color manual printed correctly (landscape cover rotated, CJK text crisp); text test page through the AOT build; 69 tests; AOT 43.2 MB
+- Print speed to Microsoft Print to PDF: 49-page color manual ~60 s (11 MB → 38 MB), 383-page text manual ~274 s (7.4 → 41 MB). Measured split for the color manual: PDFium drawing ~70 ms/page (3.5 s total), driver `EndPage` ~320 ms/page (15.7 s), and the rest in the driver's `EndDoc` conversion. The slowness is that virtual printer's driver; real printers will differ, so measure on one before optimizing (e.g. `FPDF_SetPrintMode`)
+- Known: the dialog shows "This app doesn't support print preview"; Pages dropdown and Cancel were not clicked in testing (the dialog runs in a shell process the test tool can't drive)
+
 ### M5: Windows integration
 - Single instance + named-pipe forwarding
 - Command line: `LightPdf.exe file.pdf [file2.pdf]`

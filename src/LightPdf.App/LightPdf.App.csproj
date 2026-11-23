@@ -4,6 +4,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>LightPdf</AssemblyName>
     <RootNamespace>LightPdf.App</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks> <!-- source-generated P/Invoke for Win32 printing -->
 
     <!-- Native AOT: one self-contained exe, no JIT, fast startup. -->
     <PublishAot>true</PublishAot>

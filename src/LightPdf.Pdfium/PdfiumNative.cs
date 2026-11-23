@@ -16,6 +16,7 @@ public static partial class PdfiumNative
     // Render flags (FPDF_*)
     public const int RenderAnnotations = 0x01;
     public const int RenderLcdText = 0x02;
+    public const int RenderPrinting = 0x800;
 
     [LibraryImport(Lib)]
     public static partial void FPDF_InitLibrary();
@@ -60,6 +61,14 @@ public static partial class PdfiumNative
 
     [LibraryImport(Lib)]
     public static partial void FPDF_RenderPageBitmap(IntPtr bitmap, SafePageHandle page,
+        int startX, int startY, int sizeX, int sizeY, int rotate, int flags);
+
+    /// <summary>
+    /// Windows only: draws a page onto a GDI device context (e.g. a printer DC) as vector drawing
+    /// commands. Coordinates are in device pixels relative to the DC's origin.
+    /// </summary>
+    [LibraryImport(Lib)]
+    public static partial void FPDF_RenderPage(IntPtr dc, SafePageHandle page,
         int startX, int startY, int sizeX, int sizeY, int rotate, int flags);
 
     /// <summary>Maps a point in page space (points, origin bottom-left, before /Rotate) to device pixels.</summary>
