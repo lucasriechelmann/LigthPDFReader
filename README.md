@@ -3,6 +3,8 @@
 A fast, minimal PDF reader for Windows. It opens instantly, does what a reader should, and nothing else:
 no accounts, no cloud, no telemetry, no pop-ups.
 
+**Website and downloads:** https://lucasriechelmann.github.io/LigthPDFReader/
+
 - **Fast:** about 0.3 s from launch to the first page (Native AOT, PDFium)
 - **Read:** continuous scrolling, zoom (Ctrl+wheel, Ctrl +/−, fit width, fit page), tabs, resume where you left off
 - **Find and copy:** Ctrl+F search across the whole document, select text with the mouse, Ctrl+C
