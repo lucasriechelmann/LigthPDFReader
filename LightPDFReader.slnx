@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LightPdf.App/LightPdf.App.csproj" />
+    <Project Path="src/LightPdf.Core/LightPdf.Core.csproj" />
+    <Project Path="src/LightPdf.Pdfium/LightPdf.Pdfium.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LightPdf.Core.Tests/LightPdf.Core.Tests.csproj" />
+  </Folder>
+</Solution>

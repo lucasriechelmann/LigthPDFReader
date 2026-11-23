@@ -1,0 +1,20 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="LightPdf.App.MainWindow"
+        Title="LightPdf" Width="1000" Height="800"
+        DragDrop.AllowDrop="True">
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="8">
+            <Button x:Name="OpenButton" Content="Open…" Click="OnOpenClick" />
+            <Button x:Name="PrevButton" Content="◀" Click="OnPrevClick" IsEnabled="False" />
+            <TextBlock x:Name="PageText" VerticalAlignment="Center" MinWidth="80" TextAlignment="Center" />
+            <Button x:Name="NextButton" Content="▶" Click="OnNextClick" IsEnabled="False" />
+            <TextBlock x:Name="StatusText" VerticalAlignment="Center" Opacity="0.7" />
+        </StackPanel>
+        <ScrollViewer x:Name="Scroller" Background="#3a3a3a"
+                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <Image x:Name="PageImage" Margin="16" Stretch="None"
+                   HorizontalAlignment="Center" VerticalAlignment="Top" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>
