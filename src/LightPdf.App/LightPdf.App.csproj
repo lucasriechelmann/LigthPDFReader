@@ -2,6 +2,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon> <!-- exe icon (Explorer, taskbar pin, Default apps) -->
     <AssemblyName>LightPdf</AssemblyName>
     <RootNamespace>LightPdf.App</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks> <!-- source-generated P/Invoke for Win32 printing -->
@@ -26,5 +27,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LightPdf.Core\LightPdf.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Window/taskbar icon, loaded by Avalonia. -->
+    <AvaloniaResource Include="Assets\app.ico" />
+    <!-- Icon for .pdf files once associated (registry DefaultIcon points at this file). -->
+    <None Include="Assets\pdf-document.ico" Link="pdf-document.ico"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

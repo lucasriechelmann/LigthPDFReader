@@ -1,17 +1,30 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
+using LightPdf.Core;
 
 namespace LightPdf.App;
 
 public partial class App : Application
 {
+    /// <summary>Set by Program.Main before Avalonia starts.</summary>
+    internal static StartupOptions? StartupOptions { get; set; }
+
+    /// <summary>Non-null when this process is the session's primary reader (not in automated runs).</summary>
+    internal static SingleInstance? Instance { get; set; }
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.MainWindow = new MainWindow(StartupOptions.Parse(desktop.Args ?? []));
+        {
+            var window = new MainWindow(StartupOptions ?? LightPdf.App.StartupOptions.Parse(desktop.Args ?? []));
+            desktop.MainWindow = window;
+            // Files from later launches (double-clicks, "Open with") arrive here, on the pipe thread.
+            Instance?.Listen(paths => Dispatcher.UIThread.Post(() => window.OpenFromOtherInstance(paths)));
+        }
 
         base.OnFrameworkInitializationCompleted();
     }
@@ -38,8 +51,18 @@ public sealed record StartupOptions(IReadOnlyList<string> FilePaths, bool Bench,
             if (args[i].Equals("--bench", StringComparison.OrdinalIgnoreCase)) bench = true;
             else if (args[i].Equals("--snapshot", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length) snapshot = args[++i];
             else if (args[i].Equals("--print-to-pdf", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length) printToPdf = Path.GetFullPath(args[++i]);
-            else if (!args[i].StartsWith("--", StringComparison.Ordinal)) files.Add(args[i]);
+            else if (!args[i].StartsWith("--", StringComparison.Ordinal)) files.Add(FullPath(args[i]));
         }
         return new StartupOptions(files, bench, snapshot, printToPdf);
+    }
+
+    /// <summary>
+    /// Absolute paths, because they may be handed to another instance with a different working directory.
+    /// A malformed path is kept as-is, so opening it reports a normal "cannot open" error.
+    /// </summary>
+    private static string FullPath(string path)
+    {
+        try { return Path.GetFullPath(path); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return path; }
     }
 }

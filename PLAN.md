@@ -131,6 +131,15 @@ Keeping `Core` free of UI types makes the engine testable, and lets us swap UI f
 - Per-user file association + "Set as default" button that opens Settings
 - App icon and file icon
 
+**M5 results (2026-11-23), done:**
+- `SingleInstance` (Core): `Local\LightPdf-<session>` mutex + named pipe restricted to the current user (`PipeOptions.CurrentUserOnly`). A second launch sends its absolute paths and exits (22 ms measured); an empty message means "just come to the front". If the primary doesn't answer within 3 s, the new process runs standalone
+- Foreground: the second process calls `AllowSetForegroundWindow(ASFW_ANY)`, then the primary restores from minimized and calls `SetForegroundWindow` (verified: restored, foreground, switched to the already-open tab)
+- `FileAssociation` (Core): per-user ProgID `LightPdf.Document`, `.pdf\OpenWithProgids`, `Applications\LightPdf.exe`, Capabilities + RegisteredApplications (shows in Default apps). Never overwrites `.pdf`'s default; unregister removes only our entries. Tested against a throwaway HKCU key
+- ⋮ menu: "Make LightPdf the default PDF app…" registers, notifies Explorer (`SHChangeNotify`) and opens `ms-settings:defaultapps?registeredAppUser=LightPdf`; "Remove LightPdf from Open with"
+- Icons from `tools/Make-Icons.ps1` (each size drawn separately, 16–256 px): exe, window and taskbar icon `app.ico` (embedded, and kept by Native AOT); `pdf-document.ico` shipped next to the exe for .pdf files
+- 79 tests; AOT 43.7 MB; ~255 ms to first page. Automated modes (`--bench`, `--print-to-pdf`) skip single-instance
+- Not run on this machine: the actual registration (it changes your real file associations); it's in the ⋮ menu for you to run
+
 ### M6: Polish and release
 - Dark mode (follow the system theme; optional inverted page colors)
 - Error handling for corrupt or unsupported files

@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="LightPdf.App.MainWindow"
-        Title="LightPdf" Width="1000" Height="800"
+        Title="LightPdf" Width="1000" Height="800" Icon="/Assets/app.ico"
         DragDrop.AllowDrop="True">
     <Window.Styles>
         <!-- Toolbar buttons never take focus, so Space/arrows keep scrolling the document. -->
@@ -60,6 +60,15 @@
             <Button x:Name="ZoomInButton" Content="+" Click="OnZoomInClick" ToolTip.Tip="Zoom in (Ctrl++)" />
             <ToggleButton x:Name="FitWidthButton" Content="Fit width" Click="OnFitWidthClick" ToolTip.Tip="Fit width (Ctrl+2)" />
             <ToggleButton x:Name="FitPageButton" Content="Fit page" Click="OnFitPageClick" ToolTip.Tip="Fit page (Ctrl+0)" />
+            <Separator />
+            <Button x:Name="MoreButton" Content="⋮" ToolTip.Tip="More">
+                <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                        <MenuItem Header="Make LightPdf the default PDF app…" Click="OnMakeDefaultClick" />
+                        <MenuItem Header="Remove LightPdf from “Open with”" Click="OnUnregisterClick" />
+                    </MenuFlyout>
+                </Button.Flyout>
+            </Button>
             <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="8,0" Opacity="0.7" />
             <Button x:Name="CancelPrintButton" Content="Cancel printing" Click="OnCancelPrintClick" IsVisible="False" />
         </StackPanel>
