@@ -87,6 +87,16 @@ Keeping `Core` free of UI types makes the engine testable, and lets us swap UI f
 - Recent files list (small JSON file in `%AppData%`)
 - Remember the last page and zoom per file
 
+**M2 results (2026-11-23), done:**
+- Tabs (one shared PDFium worker): Ctrl+O/T open (multi-select), Ctrl+W/F4 close, middle-click close, Ctrl+Tab / Ctrl+Shift+Tab / Ctrl+PgUp/PgDn cycle; opening an already-open file switches to its tab
+- Multiple files from the command line and drag-and-drop
+- `RecentFilesStore` (Core, 8 tests): 20 most recent files with page, zoom and mode, in `%AppData%\LightPdf\recent.json`; source-generated JSON (AOT-safe), atomic save, tolerant of corrupt files; unreadable files are dropped from the list
+- Recent ▾ menu, and an empty-state screen listing recent files
+- Hidden tabs keep their layout and scroll position but free their bitmaps (2 tabs ≈ 130 MB, about the same as 1)
+- AOT: ~258 ms to first page; 43.1 MB; 45 tests
+- Bugs found in real-window testing: restoring a saved page from inside the first layout pass was clamped to page 1 (now deferred until after layout, and kept pending if the tab is hidden first); an empty `MenuFlyout` never opens, so `Opening` can't populate it (now prebuilt); rebuilding the menu while it was open left it stuck open
+- Not exercised by hand: drag-and-drop from Explorer and multi-select in the Open dialog (same code path as the tested multi-file command line)
+
 ### M3: Search and copy
 - Ctrl+F search bar with next/previous and highlighting all matches on visible pages
 - Text selection with the mouse, Ctrl+C, Ctrl+A on the page

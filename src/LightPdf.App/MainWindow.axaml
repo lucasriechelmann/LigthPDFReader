@@ -1,6 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:local="using:LightPdf.App"
         x:Class="LightPdf.App.MainWindow"
         Title="LightPdf" Width="1000" Height="800"
         DragDrop.AllowDrop="True">
@@ -16,11 +15,38 @@
             <Setter Property="Height" Value="20" />
             <Setter Property="Margin" Value="4,0" />
         </Style>
+        <!-- Compact tabs (Fluent's default tab header is 24pt text). -->
+        <Style Selector="TabControl#Tabs">
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="TabControl#Tabs TabItem">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Padding" Value="12,0,6,0" />
+        </Style>
+        <Style Selector="Button.tabClose">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="5,1" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.recentLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Padding" Value="10,6" />
+        </Style>
     </Window.Styles>
 
     <DockPanel>
         <StackPanel x:Name="Toolbar" DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="8,6">
             <Button Content="Open…" Click="OnOpenClick" ToolTip.Tip="Open (Ctrl+O)" />
+            <Button x:Name="RecentButton" Content="Recent ▾" ToolTip.Tip="Recently opened files">
+                <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedLeft" />
+                </Button.Flyout>
+            </Button>
             <Separator />
             <Button x:Name="PrevButton" Content="▲" Click="OnPrevClick" IsEnabled="False" ToolTip.Tip="Previous page" />
             <TextBox x:Name="PageBox" Width="56" TextAlignment="Center" VerticalAlignment="Center"
@@ -28,17 +54,28 @@
             <TextBlock x:Name="PageCountText" VerticalAlignment="Center" Text="/ 0" MinWidth="40" />
             <Button x:Name="NextButton" Content="▼" Click="OnNextClick" IsEnabled="False" ToolTip.Tip="Next page" />
             <Separator />
-            <Button Content="−" Click="OnZoomOutClick" ToolTip.Tip="Zoom out (Ctrl+−)" />
-            <TextBlock x:Name="ZoomText" VerticalAlignment="Center" MinWidth="48" TextAlignment="Center" Text="100%" />
-            <Button Content="+" Click="OnZoomInClick" ToolTip.Tip="Zoom in (Ctrl++)" />
+            <Button x:Name="ZoomOutButton" Content="−" Click="OnZoomOutClick" ToolTip.Tip="Zoom out (Ctrl+−)" />
+            <TextBlock x:Name="ZoomText" VerticalAlignment="Center" MinWidth="48" TextAlignment="Center" />
+            <Button x:Name="ZoomInButton" Content="+" Click="OnZoomInClick" ToolTip.Tip="Zoom in (Ctrl++)" />
             <ToggleButton x:Name="FitWidthButton" Content="Fit width" Click="OnFitWidthClick" ToolTip.Tip="Fit width (Ctrl+2)" />
             <ToggleButton x:Name="FitPageButton" Content="Fit page" Click="OnFitPageClick" ToolTip.Tip="Fit page (Ctrl+0)" />
             <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="8,0" Opacity="0.7" />
         </StackPanel>
 
-        <ScrollViewer x:Name="Scroller" Background="#3a3a3a" Focusable="True" FocusAdorner="{x:Null}"
-                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-            <local:PdfPagesView x:Name="Pages" HorizontalAlignment="Center" VerticalAlignment="Top" />
-        </ScrollViewer>
+        <Grid>
+            <TabControl x:Name="Tabs" IsVisible="False" SelectionChanged="OnTabSelectionChanged" />
+
+            <!-- Shown when no document is open. -->
+            <Border x:Name="EmptyState" Background="#3a3a3a">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" Width="420">
+                    <TextBlock Text="Open a PDF" FontSize="24" HorizontalAlignment="Center" Foreground="White" />
+                    <TextBlock Text="Ctrl+O, or drop files anywhere in this window" HorizontalAlignment="Center"
+                               Foreground="#c8c8c8" />
+                    <TextBlock x:Name="RecentHeading" Text="Recent" FontWeight="SemiBold" Margin="0,16,0,0"
+                               Foreground="#c8c8c8" />
+                    <StackPanel x:Name="RecentList" Spacing="2" />
+                </StackPanel>
+            </Border>
+        </Grid>
     </DockPanel>
 </Window>

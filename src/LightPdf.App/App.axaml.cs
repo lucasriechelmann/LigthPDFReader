@@ -18,21 +18,23 @@ public partial class App : Application
 }
 
 /// <summary>
-/// Command line: <c>LightPdf.exe [--bench] [--snapshot out.png] [file.pdf]</c>.
-/// --bench prints startup timing and exits; --snapshot saves the first rendered page.
+/// Command line: <c>LightPdf.exe [--bench] [--snapshot out.png] [file.pdf ...]</c>.
+/// --bench prints startup timing and exits (and leaves the recent-files list untouched);
+/// --snapshot saves the first rendered page.
 /// </summary>
-public sealed record StartupOptions(string? FilePath, bool Bench, string? SnapshotPath = null)
+public sealed record StartupOptions(IReadOnlyList<string> FilePaths, bool Bench, string? SnapshotPath = null)
 {
     public static StartupOptions Parse(string[] args)
     {
         bool bench = false;
-        string? snapshot = null, file = null;
+        string? snapshot = null;
+        var files = new List<string>();
         for (int i = 0; i < args.Length; i++)
         {
             if (args[i].Equals("--bench", StringComparison.OrdinalIgnoreCase)) bench = true;
             else if (args[i].Equals("--snapshot", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length) snapshot = args[++i];
-            else if (!args[i].StartsWith("--", StringComparison.Ordinal)) file ??= args[i];
+            else if (!args[i].StartsWith("--", StringComparison.Ordinal)) files.Add(args[i]);
         }
-        return new StartupOptions(file, bench, snapshot);
+        return new StartupOptions(files, bench, snapshot);
     }
 }

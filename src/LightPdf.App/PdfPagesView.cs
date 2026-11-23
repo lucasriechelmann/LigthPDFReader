@@ -48,6 +48,8 @@ public sealed class PdfPagesView : Control
     private PageLayout? _layout;
     private ScrollViewer? _scroller;
     private bool _settling;
+    private ViewState? _pendingView;
+    private int? _restoringPage; // saved page we will scroll to once layout has settled
 
     private sealed record PendingRender(int Width, int Height, CancellationTokenSource Cts);
 
@@ -75,25 +77,66 @@ public sealed class PdfPagesView : Control
 
     // ---------------------------------------------------------------- document
 
-    /// <summary>Shows a document (already opened on <paramref name="worker"/>). The caller keeps ownership.</summary>
-    public void SetDocument(PdfWorker worker, PdfDocument document, PageSize[] pageSizes)
+    /// <summary>
+    /// Shows a document (already opened on <paramref name="worker"/>). The caller keeps ownership.
+    /// <paramref name="initialView"/> (page, zoom) is applied as soon as the viewport has a real size,
+    /// which for a brand-new tab is only after its first layout pass.
+    /// </summary>
+    public void SetDocument(PdfWorker worker, PdfDocument document, PageSize[] pageSizes, ViewState? initialView = null)
     {
         ResetRenderState();
         _worker = worker;
         _document = document;
         _sizes = pageSizes;
         _maxPageWidth = pageSizes.Length == 0 ? 0 : pageSizes.Max(s => s.Width);
-        CurrentPage = 0;
+        _layout = null;
+        _pendingView = initialView ?? ViewState.Default;
+        TryApplyPendingView();
+    }
 
-        if (ComputeFitZoom(ZoomMode) is { } fit) Zoom = fit;
+    /// <summary>Where the reader is now, for saving and restoring.</summary>
+    public ViewState GetViewState() =>
+        _pendingView ?? new ViewState(_restoringPage ?? CurrentPage, Zoom, ZoomMode);
+
+    private void TryApplyPendingView()
+    {
+        if (_pendingView is not { } view || _scroller is null || PageCount == 0) return;
+        Size vp = _scroller.Viewport;
+        if (vp.Width <= 0 || vp.Height <= 0) return; // not laid out yet; retried on the next ScrollChanged
+        _pendingView = null;
+
+        CurrentPage = Math.Clamp(view.Page, 0, PageCount - 1);
+        ZoomMode = view.Mode;
+        Zoom = view.Mode == ZoomMode.Custom ? Core.Zoom.Clamp(view.Zoom) : ComputeFitZoom(view.Mode) ?? 1;
         RebuildLayout();
-        if (_scroller is not null)
-        {
-            UpdateLayout();
-            _scroller.Offset = default;
-        }
-        RequestRenders();
         RaiseViewChanged();
+
+        if (CurrentPage == 0)
+        {
+            RequestRenders();
+            return;
+        }
+
+        // We are usually called from inside a layout pass (ScrollChanged), where UpdateLayout() can't
+        // grow the scroll extent yet, so an offset set now would be clamped to 0. Jump once layout is done.
+        _restoringPage = CurrentPage;
+        PostCompleteRestore();
+    }
+
+    /// <summary>
+    /// Scrolls to the saved page after the current layout pass. If the view gets hidden first
+    /// (another tab selected), the jump stays pending and runs when it is shown again.
+    /// </summary>
+    private void PostCompleteRestore()
+    {
+        PdfDocument? document = _document;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_restoringPage is not { } page || !ReferenceEquals(document, _document) || _scroller is null) return;
+            _restoringPage = null;
+            GoToPage(page);
+            RequestRenders();
+        }, DispatcherPriority.Background);
     }
 
     public void ClearDocument()
@@ -224,10 +267,25 @@ public sealed class PdfPagesView : Control
         _scroller = this.FindAncestorOfType<ScrollViewer>();
         if (_scroller is null) return;
         _scroller.ScrollChanged += OnScrollChanged;
+
+        // Back in view (e.g. its tab was selected again): re-render once layout has settled.
+        Dispatcher.UIThread.Post(() =>
+        {
+            TryApplyPendingView();
+            InvalidateVisual();
+            RequestRenders();
+        }, DispatcherPriority.Loaded);
+        if (_restoringPage is not null)
+            PostCompleteRestore(); // hidden before its saved page was restored
     }
 
+    /// <summary>
+    /// Hidden (e.g. its tab is not selected): keep the layout and scroll position, but drop the
+    /// bitmaps and pending renders, so background tabs cost almost no memory or PDFium time.
+    /// </summary>
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        ResetRenderState();
         if (_scroller is not null)
         {
             _scroller.ScrollChanged -= OnScrollChanged;
@@ -238,6 +296,8 @@ public sealed class PdfPagesView : Control
 
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
+        TryApplyPendingView();
+
         if (e.ViewportDelta != default)
         {
             InvalidateMeasure(); // we always cover at least the viewport
@@ -265,7 +325,7 @@ public sealed class PdfPagesView : Control
 
     private void UpdateCurrentPage()
     {
-        if (_layout is null || _scroller is null) return;
+        if (_layout is null || _scroller is null || _restoringPage is not null) return;
         Vector offset = _scroller.Offset;
         Size vp = _scroller.Viewport;
         bool atEnd = offset.Y + vp.Height >= _scroller.Extent.Height - 1;
@@ -361,7 +421,7 @@ public sealed class PdfPagesView : Control
     /// <summary>Queues renders for visible pages (nearest the current page first) plus one page of prefetch each way.</summary>
     private void RequestRenders()
     {
-        if (_layout is null || _worker is null || _document is null) return;
+        if (_layout is null || _worker is null || _document is null || _restoringPage is not null) return;
         var (first, last) = VisibleRange();
         if (first > last) { CancelPending(_ => true); return; }
 
