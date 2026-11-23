@@ -62,6 +62,18 @@
             <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="8,0" Opacity="0.7" />
         </StackPanel>
 
+        <!-- Find bar (Ctrl+F). -->
+        <Border x:Name="SearchBar" DockPanel.Dock="Top" IsVisible="False" Padding="8,4" Background="#262626">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBox x:Name="SearchBox" Width="260" PlaceholderText="Find in document" VerticalAlignment="Center" />
+                <Button Content="▲" Click="OnSearchPrevClick" Focusable="False" ToolTip.Tip="Previous match (Shift+Enter, Shift+F3)" />
+                <Button Content="▼" Click="OnSearchNextClick" Focusable="False" ToolTip.Tip="Next match (Enter, F3)" />
+                <ToggleButton x:Name="MatchCaseButton" Content="Aa" Click="OnMatchCaseClick" Focusable="False" ToolTip.Tip="Match case" />
+                <TextBlock x:Name="SearchStatus" VerticalAlignment="Center" MinWidth="110" Margin="6,0" />
+                <Button Content="✕" Click="OnSearchCloseClick" Focusable="False" ToolTip.Tip="Close (Esc)" />
+            </StackPanel>
+        </Border>
+
         <Grid>
             <TabControl x:Name="Tabs" IsVisible="False" SelectionChanged="OnTabSelectionChanged" />
 

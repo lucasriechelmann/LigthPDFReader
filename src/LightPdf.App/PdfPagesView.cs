@@ -23,7 +23,7 @@ public sealed class PageRenderedEventArgs(int pageIndex, WriteableBitmap bitmap)
 /// whole document as its size (so scrollbars and wheel scrolling work normally) but only draws
 /// and renders the pages near the viewport. All PDFium work goes through the <see cref="PdfWorker"/>.
 /// </summary>
-public sealed class PdfPagesView : Control
+public sealed partial class PdfPagesView : Control
 {
     private const double Gap = 12;
     private const double StripMargin = 16;
@@ -85,6 +85,7 @@ public sealed class PdfPagesView : Control
     public void SetDocument(PdfWorker worker, PdfDocument document, PageSize[] pageSizes, ViewState? initialView = null)
     {
         ResetRenderState();
+        ResetTextState();
         _worker = worker;
         _document = document;
         _sizes = pageSizes;
@@ -142,6 +143,7 @@ public sealed class PdfPagesView : Control
     public void ClearDocument()
     {
         ResetRenderState();
+        ResetTextState();
         _document = null;
         _sizes = [];
         _layout = null;
@@ -385,6 +387,8 @@ public sealed class PdfPagesView : Control
                 context.DrawImage(bitmap, dest);
             else if (_failed.Contains(i))
                 DrawMessage(context, dest, "This page could not be rendered.");
+
+            DrawTextOverlays(context, i, dest); // search matches and selection
         }
     }
 

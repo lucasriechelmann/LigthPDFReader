@@ -31,6 +31,7 @@ public partial class MainWindow : Window
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel); // Ctrl shortcuts win over focused controls
         PageBox.KeyDown += OnPageBoxKeyDown;
         PageBox.LostFocus += (_, _) => UpdateToolbar();
+        InitSearchBar();
         UpdateUi();
     }
 
@@ -82,6 +83,7 @@ public partial class MainWindow : Window
 
         tab.Pages.ViewChanged += (s, _) => { if (ReferenceEquals(s, ActiveTab?.Pages)) UpdateToolbar(); };
         tab.Pages.PageRendered += OnPageRendered;
+        tab.Pages.SearchChanged += (s, _) => { if (ReferenceEquals(s, ActiveTab?.Pages)) UpdateSearchStatus(); };
 
         Tabs.Items.Add(item);
         Tabs.SelectedItem = item;
@@ -117,7 +119,8 @@ public partial class MainWindow : Window
         // Ignore SelectionChanged bubbling up from controls inside a tab.
         if (!ReferenceEquals(e.Source, Tabs)) return;
         UpdateUi();
-        ActiveTab?.Scroller.Focus();
+        SyncSearchBarToTab();
+        if (!SearchBox.IsFocused) ActiveTab?.Scroller.Focus();
     }
 
     // ---------------------------------------------------------------- opening
@@ -330,13 +333,31 @@ public partial class MainWindow : Window
     /// <summary>Ctrl shortcuts, handled on the way down so focused controls (tabs, text boxes) can't swallow them.</summary>
     private async void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
-        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
         bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var tab = ActiveTab;
+        bool inTextBox = e.Source is TextBox;
+
+        if (e.Key == Key.F3)
+        {
+            NextMatch(shift ? -1 : 1);
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Escape && !inTextBox && tab is { Pages.HasSelection: true })
+        {
+            tab.Pages.ClearSelection();
+            e.Handled = true;
+            return;
+        }
+        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
         e.Handled = true;
 
         switch (e.Key)
         {
+            case Key.F when tab is not null: ShowSearchBar(); break;
+            // In a text box, Ctrl+C / Ctrl+A keep their usual meaning.
+            case Key.C when !inTextBox: await CopySelectionAsync(); break;
+            case Key.A when !inTextBox: tab?.Pages.SelectAllOnPage(); break;
             case Key.O or Key.T: await ShowOpenDialogAsync(); break;
             case Key.W or Key.F4: if (Tabs.SelectedItem is TabItem item) CloseTab(item); break;
             case Key.Tab: CycleTab(shift ? -1 : 1); break;

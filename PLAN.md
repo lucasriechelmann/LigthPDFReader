@@ -101,6 +101,16 @@ Keeping `Core` free of UI types makes the engine testable, and lets us swap UI f
 - Ctrl+F search bar with next/previous and highlighting all matches on visible pages
 - Text selection with the mouse, Ctrl+C, Ctrl+A on the page
 
+**M3 results (2026-11-23), done:**
+- `PdfDocument.GetPageText`: text plus a loose box per character, in normalized display coordinates (an affine map from three `FPDF_PageToDevice` probes handles /Rotate); vertical-line pages are handled by transposing
+- `TextSearch` (managed): case-insensitive or match case; whitespace runs match across PDF line breaks
+- Find bar (Ctrl+F): search as you type (300 ms debounce), Enter/Shift+Enter and F3/Shift+F3, match case, "n of N" (with "+" while later pages are still being searched), Esc closes; one PDFium work item per page so renders interleave; starts at the current page; per-tab search state
+- Selection: drag across lines and pages, I-beam cursor, Ctrl+A (current page), Ctrl+C, Esc clears; text loaded lazily (48-page cache)
+- Real manual: "printer driver" → 145 matches across 383 pages in under 2.5 s; copied text keeps line breaks
+- AOT: ~260 ms to first page; 43.2 MB; 61 tests
+- Bugs found: xUnit ran PDFium tests in parallel → access violation (fixed with a serial test collection, the same single-thread rule as `PdfWorker`); a record property returning the record type made `ToString()` recurse → stack overflow; hit-testing past a short line's end picked the longer line below (now nearest line first, then nearest char)
+- Not yet: double-click to select a word, auto-scroll while drag-selecting past the viewport edge
+
 ### M4: Printing
 - Win32 print dialog (printer, page range, copies)
 - Render each page to the printer HDC at printer DPI with `FPDF_RenderPage`, fit to paper

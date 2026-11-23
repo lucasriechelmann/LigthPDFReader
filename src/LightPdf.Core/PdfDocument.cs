@@ -83,6 +83,77 @@ public sealed class PdfDocument : IDisposable
         }
     }
 
+    /// <summary>Extracts a page's text and per-character boxes (normalized, rotation applied).</summary>
+    public unsafe PageText GetPageText(int pageIndex)
+    {
+        CheckPage(pageIndex);
+        using var page = PdfiumNative.FPDF_LoadPage(_handle, pageIndex);
+        if (page.IsInvalid)
+            throw PdfException.FromLastError($"Cannot load page {pageIndex + 1}");
+
+        IntPtr textPage = PdfiumNative.FPDFText_LoadPage(page);
+        if (textPage == IntPtr.Zero)
+            return new PageText(pageIndex, "", []);
+        try
+        {
+            int count = Math.Max(0, PdfiumNative.FPDFText_CountChars(textPage));
+            string text = "";
+            if (count > 0)
+            {
+                var buffer = new char[count + 1]; // + terminator
+                fixed (char* p = buffer)
+                    PdfiumNative.FPDFText_GetText(textPage, 0, count, p);
+                text = new string(buffer, 0, count);
+            }
+
+            var toNorm = PageTransform.Create(page);
+            var boxes = new NormRect[count];
+            for (int i = 0; i < count; i++)
+            {
+                if (PdfiumNative.FPDFText_GetLooseCharBox(textPage, i, out FsRectF r) && r.Right > r.Left && r.Top > r.Bottom)
+                {
+                    var (x1, y1) = toNorm.Apply(r.Left, r.Top);
+                    var (x2, y2) = toNorm.Apply(r.Right, r.Bottom);
+                    boxes[i] = NormRect.FromPoints(x1, y1, x2, y2);
+                }
+            }
+            return new PageText(pageIndex, text, boxes, toNorm.MapsPageXToVertical);
+        }
+        finally
+        {
+            PdfiumNative.FPDFText_ClosePage(textPage); // before the page itself is closed
+        }
+    }
+
+    /// <summary>
+    /// Affine map from page space (points, y up, unrotated) to normalized display coordinates (0..1, y down,
+    /// /Rotate applied), derived from three FPDF_PageToDevice probes on a large virtual device for precision.
+    /// </summary>
+    private readonly record struct PageTransform(double Ox, double Oy, double XxPerPt, double XyPerPt, double YxPerPt, double YyPerPt)
+    {
+        private const int Device = 1_000_000;
+        private const double Probe = 1000;
+
+        public static PageTransform Create(SafePageHandle page)
+        {
+            static (double, double) Map(SafePageHandle p, double x, double y)
+            {
+                PdfiumNative.FPDF_PageToDevice(p, 0, 0, Device, Device, 0, x, y, out int dx, out int dy);
+                return (dx / (double)Device, dy / (double)Device);
+            }
+            var (ox, oy) = Map(page, 0, 0);
+            var (ax, ay) = Map(page, Probe, 0);
+            var (bx, by) = Map(page, 0, Probe);
+            return new PageTransform(ox, oy, (ax - ox) / Probe, (ay - oy) / Probe, (bx - ox) / Probe, (by - oy) / Probe);
+        }
+
+        public (double X, double Y) Apply(double x, double y)
+            => (Ox + x * XxPerPt + y * YxPerPt, Oy + x * XyPerPt + y * YyPerPt);
+
+        /// <summary>True for /Rotate 90 or 270: text written along page x runs vertically on screen.</summary>
+        public bool MapsPageXToVertical => Math.Abs(XyPerPt) > Math.Abs(XxPerPt);
+    }
+
     private void CheckPage(int pageIndex)
     {
         ObjectDisposedException.ThrowIf(_handle.IsClosed, this);

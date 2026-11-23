@@ -3,6 +3,7 @@ using LightPdf.Pdfium;
 
 namespace LightPdf.Core.Tests;
 
+[Collection(PdfiumCollection.Name)]
 public class PdfDocumentTests
 {
     [Fact]

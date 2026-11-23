@@ -11,14 +11,24 @@ internal static class TestPdf
     /// in PDF coordinates (origin bottom-left). With <paramref name="userPassword"/>, the file is
     /// encrypted using the standard security handler, revision 2 (RC4 40-bit).
     /// </summary>
-    public static byte[] Create(int pageCount = 1, string? userPassword = null)
+    /// <param name="textLines">Optional text drawn in 24pt Helvetica: first baseline at (72, 700), then every 30pt down.</param>
+    /// <param name="rotate">Page /Rotate value (0, 90, 180, 270).</param>
+    public static byte[] Create(int pageCount = 1, string? userPassword = null, string[]? textLines = null, int rotate = 0)
     {
         var objects = new List<string>
         {
             "<< /Type /Catalog /Pages 2 0 R >>",
             "", // pages tree, filled below
         };
-        const string content = "0 0 0 rg 100 100 200 200 re f";
+        string content = "0 0 0 rg 100 100 200 200 re f";
+        if (textLines is { Length: > 0 })
+        {
+            var text = new StringBuilder("\nBT /F1 24 Tf 72 700 Td");
+            for (int i = 0; i < textLines.Length; i++)
+                text.Append(i == 0 ? "" : " 0 -30 Td").Append($" ({textLines[i]}) Tj");
+            content += text.Append(" ET");
+        }
+        const string resources = "/Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >>";
         var crypt = userPassword is null ? null : new Rc4Security(userPassword);
 
         var kids = new List<string>();
@@ -27,7 +37,7 @@ internal static class TestPdf
             int pageObj = objects.Count + 1;
             int contentObj = pageObj + 1;
             kids.Add($"{pageObj} 0 R");
-            objects.Add($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {contentObj} 0 R >>");
+            objects.Add($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate {rotate} {resources} /Contents {contentObj} 0 R >>");
             string data = crypt?.EncryptString(contentObj, content) ?? content;
             objects.Add($"<< /Length {data.Length} >>\nstream\n{data}\nendstream");
         }
@@ -55,12 +65,13 @@ internal static class TestPdf
         return Encoding.Latin1.GetBytes(sb.ToString());
     }
 
-    public static string WriteToTemp(int pageCount = 1, string fileName = "test.pdf", string? userPassword = null)
+    public static string WriteToTemp(int pageCount = 1, string fileName = "test.pdf", string? userPassword = null,
+        string[]? textLines = null, int rotate = 0)
     {
         string dir = Path.Combine(Path.GetTempPath(), "lightpdf-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         string path = Path.Combine(dir, fileName);
-        File.WriteAllBytes(path, Create(pageCount, userPassword));
+        File.WriteAllBytes(path, Create(pageCount, userPassword, textLines, rotate));
         return path;
     }
 
