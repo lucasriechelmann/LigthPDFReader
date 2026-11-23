@@ -13,13 +13,11 @@ public partial class MainWindow
     private static readonly IBrush NoResultsBrush = Brushes.IndianRed;
 
     private readonly DispatcherTimer _searchDebounce = new() { Interval = TimeSpan.FromMilliseconds(300) };
-    private readonly DispatcherTimer _statusClear = new() { Interval = TimeSpan.FromSeconds(3) };
     private bool _syncingSearchBox; // true while we set SearchBox.Text ourselves
 
     private void InitSearchBar()
     {
         _searchDebounce.Tick += (_, _) => RunSearch();
-        _statusClear.Tick += (_, _) => { _statusClear.Stop(); StatusText.Text = ""; };
         SearchBox.TextChanged += (_, _) =>
         {
             if (_syncingSearchBox) return;
@@ -124,12 +122,5 @@ public partial class MainWindow
         if (string.IsNullOrEmpty(text)) return;
         await clipboard.SetTextAsync(text);
         ShowStatus($"Copied {text.Length:N0} characters");
-    }
-
-    private void ShowStatus(string message)
-    {
-        StatusText.Text = message;
-        _statusClear.Stop();
-        _statusClear.Start();
     }
 }

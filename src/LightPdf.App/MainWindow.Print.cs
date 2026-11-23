@@ -15,8 +15,6 @@ public partial class MainWindow
 
     private async void OnPrintClick(object? sender, RoutedEventArgs e) => await PrintActiveTabAsync();
 
-    private void OnCancelPrintClick(object? sender, RoutedEventArgs e) => _printCts?.Cancel();
-
     private async Task PrintActiveTabAsync()
     {
         if (ActiveTab is not { } tab || IsPrinting || tab.Pages.PageCount == 0) return;
@@ -38,7 +36,7 @@ public partial class MainWindow
             return;
         }
         bool ok = await RunPrintJobAsync(tab, dc, Enumerable.Range(0, tab.Pages.PageCount).ToList(), outputFile);
-        Console.WriteLine(ok ? $"printed_pages={tab.Pages.PageCount} output={outputFile}" : $"print_failed: {StatusText.Text}");
+        Console.WriteLine(ok ? $"printed_pages={tab.Pages.PageCount} output={outputFile}" : $"print_failed: {LastMessage}");
         Close();
     }
 
@@ -46,13 +44,12 @@ public partial class MainWindow
     private async Task<bool> RunPrintJobAsync(DocumentTab tab, IntPtr printerDc, IReadOnlyList<int> pages, string? outputFile)
     {
         var cts = _printCts = new CancellationTokenSource();
-        CancelPrintButton.IsVisible = true;
-        _statusClear.Stop();
-        StatusText.Text = $"Printing {pages.Count} page{(pages.Count == 1 ? "" : "s")}…";
+        void Progress(string text) => ShowProgress(text, "Cancel printing", cts.Cancel);
+        Progress($"Printing {pages.Count} page{(pages.Count == 1 ? "" : "s")}…");
         UpdateToolbar();
 
-        // Reports arrive on the UI thread (the job awaits from here), so update the status directly.
-        var progress = new InlineProgress<int>(done => StatusText.Text = $"Printing page {done} of {pages.Count}…");
+        // Reports arrive on the UI thread (the job awaits from here), so update the bar directly.
+        var progress = new InlineProgress<int>(done => Progress($"Printing page {done} of {pages.Count}…"));
         try
         {
             await Printer.RunJobAsync(_worker, tab.Document, printerDc, tab.FileName, pages, outputFile, progress, cts.Token);
@@ -65,13 +62,12 @@ public partial class MainWindow
         }
         catch (Exception ex) when (ex is IOException or PdfException or ObjectDisposedException)
         {
-            ShowStatus($"Printing failed: {ex.Message}");
+            ShowError($"Printing failed: {ex.Message}");
         }
         finally
         {
             _printCts = null;
             cts.Dispose();
-            CancelPrintButton.IsVisible = false;
             UpdateToolbar();
         }
         return false;

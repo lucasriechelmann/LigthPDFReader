@@ -37,6 +37,14 @@
             <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="Padding" Value="10,6" />
         </Style>
+        <Style Selector="Button.recentLink TextBlock.name">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
+        </Style>
+        <Style Selector="Button.recentLink TextBlock.folder">
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
     </Window.Styles>
 
     <DockPanel>
@@ -64,17 +72,38 @@
             <Button x:Name="MoreButton" Content="⋮" ToolTip.Tip="More">
                 <Button.Flyout>
                     <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                        <MenuItem x:Name="InvertColorsItem" Header="Invert page colors (night reading)" ToggleType="CheckBox"
+                                  Click="OnInvertColorsClick" InputGesture="Ctrl+I" />
+                        <MenuItem Header="Theme">
+                            <MenuItem x:Name="ThemeSystemItem" Header="Follow Windows" ToggleType="Radio" GroupName="theme" Click="OnThemeClick" Tag="System" />
+                            <MenuItem x:Name="ThemeLightItem" Header="Light" ToggleType="Radio" GroupName="theme" Click="OnThemeClick" Tag="Light" />
+                            <MenuItem x:Name="ThemeDarkItem" Header="Dark" ToggleType="Radio" GroupName="theme" Click="OnThemeClick" Tag="Dark" />
+                        </MenuItem>
+                        <Separator />
                         <MenuItem Header="Make LightPdf the default PDF app…" Click="OnMakeDefaultClick" />
                         <MenuItem Header="Remove LightPdf from “Open with”" Click="OnUnregisterClick" />
+                        <Separator />
+                        <MenuItem Header="About LightPdf" Click="OnAboutClick" />
                     </MenuFlyout>
                 </Button.Flyout>
             </Button>
-            <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="8,0" Opacity="0.7" />
-            <Button x:Name="CancelPrintButton" Content="Cancel printing" Click="OnCancelPrintClick" IsVisible="False" />
         </StackPanel>
 
+        <!-- Notices, errors and print progress. -->
+        <Border x:Name="MessageBar" DockPanel.Dock="Top" IsVisible="False" Padding="12,6"
+                Background="{DynamicResource MessageBackground}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="✕" Click="OnMessageDismissClick" Focusable="False"
+                        Background="Transparent" Padding="6,2" ToolTip.Tip="Dismiss" />
+                <Button x:Name="MessageActionButton" DockPanel.Dock="Right" IsVisible="False" Focusable="False"
+                        Click="OnMessageActionClick" Margin="8,0" Padding="10,2" />
+                <TextBlock x:Name="MessageText" VerticalAlignment="Center" TextWrapping="Wrap"
+                           Foreground="{DynamicResource MessageForeground}" />
+            </DockPanel>
+        </Border>
+
         <!-- Find bar (Ctrl+F). -->
-        <Border x:Name="SearchBar" DockPanel.Dock="Top" IsVisible="False" Padding="8,4" Background="#262626">
+        <Border x:Name="SearchBar" DockPanel.Dock="Top" IsVisible="False" Padding="8,4" Background="{DynamicResource BarBackground}">
             <StackPanel Orientation="Horizontal" Spacing="6">
                 <TextBox x:Name="SearchBox" Width="260" PlaceholderText="Find in document" VerticalAlignment="Center" />
                 <Button Content="▲" Click="OnSearchPrevClick" Focusable="False" ToolTip.Tip="Previous match (Shift+Enter, Shift+F3)" />
@@ -89,13 +118,13 @@
             <TabControl x:Name="Tabs" IsVisible="False" SelectionChanged="OnTabSelectionChanged" />
 
             <!-- Shown when no document is open. -->
-            <Border x:Name="EmptyState" Background="#3a3a3a">
+            <Border x:Name="EmptyState" Background="{DynamicResource ViewerBackdrop}">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" Width="420">
-                    <TextBlock Text="Open a PDF" FontSize="24" HorizontalAlignment="Center" Foreground="White" />
+                    <TextBlock Text="Open a PDF" FontSize="24" HorizontalAlignment="Center" Foreground="{DynamicResource PrimaryText}" />
                     <TextBlock Text="Ctrl+O, or drop files anywhere in this window" HorizontalAlignment="Center"
-                               Foreground="#c8c8c8" />
+                               Foreground="{DynamicResource SecondaryText}" />
                     <TextBlock x:Name="RecentHeading" Text="Recent" FontWeight="SemiBold" Margin="0,16,0,0"
-                               Foreground="#c8c8c8" />
+                               Foreground="{DynamicResource SecondaryText}" />
                     <StackPanel x:Name="RecentList" Spacing="2" />
                 </StackPanel>
             </Border>

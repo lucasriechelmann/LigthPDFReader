@@ -21,7 +21,13 @@ try {
     tar -xzf $tgz -C $work
 
     Copy-Item (Join-Path $work 'bin/pdfium.dll') $dest -Force
-    Copy-Item (Join-Path $work 'LICENSE') (Join-Path $dest 'LICENSE.txt') -Force
+    # licenses/ holds PDFium's own BSD license and those of the libraries it bundles (FreeType, libjpeg-turbo,
+    # zlib, ...). The top-level LICENSE is only the MIT license of the pdfium-binaries build scripts.
+    $licenses = Join-Path $dest 'licenses'
+    Remove-Item -Recurse -Force $licenses -ErrorAction SilentlyContinue
+    Copy-Item (Join-Path $work 'licenses') $licenses -Recurse -Force
+    Copy-Item (Join-Path $work 'LICENSE') (Join-Path $licenses 'pdfium-binaries-build-scripts.txt') -Force
+    Remove-Item (Join-Path $dest 'LICENSE.txt') -ErrorAction SilentlyContinue
 
     $hash = (Get-FileHash (Join-Path $dest 'pdfium.dll') -Algorithm SHA256).Hash
     "version=$Version`nrid=$Rid`nsha256=$hash" | Set-Content (Join-Path $dest 'VERSION.txt')

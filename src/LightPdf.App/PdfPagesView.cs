@@ -28,9 +28,10 @@ public sealed partial class PdfPagesView : Control
     private const double Gap = 12;
     private const double StripMargin = 16;
     private const long MaxPixelsPerPage = 16_000_000;           // ~64 MB; beyond this, upscale (blurry) until tiling lands
-    // Re-rendering a page takes ~10 ms, so a big cache buys little. 96 MB is ~11 fit-width pages on a
-    // 1000-DIP window at 125% scaling; visible pages and their neighbours are never evicted regardless.
-    private const long CacheBudgetBytes = 96L * 1024 * 1024;
+    // Re-rendering a page takes ~10 ms, so a big cache buys little, and on the GPU path each cached bitmap
+    // also costs a texture (measured: ~2x the cache in process memory). 64 MB is ~7 fit-width pages on a
+    // 1000-DIP window at 125% scaling. On-screen pages are never evicted, whatever their size.
+    private const long CacheBudgetBytes = 64L * 1024 * 1024;
     private static readonly TimeSpan SettleDelay = TimeSpan.FromMilliseconds(150);
 
     private static readonly BoxShadows PageShadow =
@@ -70,6 +71,26 @@ public sealed partial class PdfPagesView : Control
     public ZoomMode ZoomMode { get; private set; } = ZoomMode.FitWidth;
     public int PageCount => _sizes.Length;
     public int CurrentPage { get; private set; }
+
+    /// <summary>Bytes held by rendered page bitmaps (for diagnostics).</summary>
+    public long CacheBytes => _cache.TotalBytes;
+
+    private static readonly IBrush NightPaper = new SolidColorBrush(Color.FromRgb(0x12, 0x12, 0x12));
+    private bool _invertColors;
+
+    /// <summary>Night reading: pages rendered with lightness inverted (see <see cref="ColorFilters"/>).</summary>
+    public bool InvertColors
+    {
+        get => _invertColors;
+        set
+        {
+            if (_invertColors == value) return;
+            _invertColors = value;
+            ResetRenderState(); // cached bitmaps have the old colors
+            InvalidateVisual();
+            RequestRenders();
+        }
+    }
 
     /// <summary>Zoom, zoom mode, or current page changed.</summary>
     public event EventHandler? ViewChanged;
@@ -381,7 +402,7 @@ public sealed partial class PdfPagesView : Control
         for (int i = first; i <= last; i++)
         {
             Rect dest = SnapToDevicePixels(PageRect(i), s);
-            context.DrawRectangle(Brushes.White, null, new RoundedRect(dest), PageShadow);
+            context.DrawRectangle(_invertColors ? NightPaper : Brushes.White, null, new RoundedRect(dest), PageShadow);
 
             if (_cache.TryGet(i, out var bitmap))
                 context.DrawImage(bitmap, dest);
@@ -442,6 +463,11 @@ public sealed partial class PdfPagesView : Control
             var (w, h) = TargetPixels(page, s);
             if (_cache.TryGet(page, out var cached) && cached.PixelSize.Width == w && cached.PixelSize.Height == h)
                 continue;
+            // Prefetch (off-screen neighbours) only while it fits the budget: at full-screen fit-width a single
+            // page can be ~64 MB, and on the GPU path every cached bitmap also costs a texture.
+            bool prefetch = page < first || page > last;
+            if (prefetch && _cache.TotalBytes + (long)w * h * 4 > CacheBudgetBytes)
+                continue;
             if (_pending.TryGetValue(page, out var pending))
             {
                 if (pending.Width == w && pending.Height == h) continue;
@@ -457,6 +483,7 @@ public sealed partial class PdfPagesView : Control
         var cts = new CancellationTokenSource();
         _pending[page] = new PendingRender(width, height, cts);
         PdfDocument document = _document!;
+        bool invert = _invertColors; // captured: a toggle mid-render discards this result
         try
         {
             // Avalonia bitmaps may be created off the UI thread; PDFium writes straight into its memory.
@@ -468,18 +495,22 @@ public sealed partial class PdfPagesView : Control
                 var wb = new WriteableBitmap(new PixelSize(width, height), new Vector(96, 96),
                     PixelFormat.Bgra8888, AlphaFormat.Premul);
                 using (var fb = wb.Lock())
+                {
                     document.RenderPage(page, fb.Address, fb.Size.Width, fb.Size.Height, fb.RowBytes);
+                    if (invert)
+                        ColorFilters.InvertLightness(fb.Address, fb.Size.Width, fb.Size.Height, fb.RowBytes);
+                }
                 return wb;
             }, cts.Token);
 
-            if (cts.IsCancellationRequested || !ReferenceEquals(document, _document))
+            if (cts.IsCancellationRequested || !ReferenceEquals(document, _document) || invert != _invertColors)
             {
                 bitmap.Dispose();
                 return;
             }
             _cache.Put(page, bitmap);
             var (first, last) = VisibleRange();
-            _cache.Trim(CacheBudgetBytes, first - 1, last + 1);
+            _cache.Trim(CacheBudgetBytes, first, last); // only on-screen pages are exempt from the budget
             InvalidateVisual();
             PageRendered?.Invoke(this, new PageRenderedEventArgs(page, bitmap));
         }

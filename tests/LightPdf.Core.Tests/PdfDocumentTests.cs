@@ -97,6 +97,75 @@ public class PdfDocumentTests
         Assert.Equal(Enumerable.Repeat(new PageSize(612, 792), 4), doc.GetPageSizes());
     }
 
+    private static string WriteBytes(byte[] bytes)
+    {
+        string path = Path.Combine(Path.GetTempPath(), "lightpdf-tests", $"{Guid.NewGuid():N}.pdf");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, bytes);
+        return path;
+    }
+
+    [Fact]
+    public void Open_EmptyFile_ThrowsFormatError()
+    {
+        var ex = Assert.Throws<PdfException>(() => PdfDocument.Open(WriteBytes([])));
+        Assert.Equal(PdfiumError.Format, ex.Error);
+    }
+
+    [Fact]
+    public void Open_RandomBytes_ThrowsFormatError()
+    {
+        var bytes = new byte[64 * 1024];
+        new Random(42).NextBytes(bytes);
+        var ex = Assert.Throws<PdfException>(() => PdfDocument.Open(WriteBytes(bytes)));
+        Assert.Equal(PdfiumError.Format, ex.Error);
+    }
+
+    [Theory]
+    [InlineData(0.9)]
+    [InlineData(0.6)]
+    [InlineData(0.3)]
+    public void Open_TruncatedFile_EitherRepairsOrFailsCleanly(double keep)
+    {
+        byte[] full = TestPdf.Create(pageCount: 5, textLines: ["Some text on every page"]);
+        string path = WriteBytes(full[..(int)(full.Length * keep)]);
+
+        try
+        {
+            using var doc = PdfDocument.Open(path); // PDFium rebuilds a missing xref when it can
+            var sizes = doc.GetPageSizes();
+            IntPtr buffer = Marshal.AllocHGlobal(100 * 100 * 4);
+            try
+            {
+                for (int i = 0; i < doc.PageCount; i++)
+                {
+                    try { doc.RenderPage(i, buffer, 100, 100, 400); }
+                    catch (PdfException) { /* a page that didn't survive: reported, not fatal */ }
+                }
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
+            Assert.All(sizes, s => Assert.True(s.Width > 0 && s.Height > 0));
+        }
+        catch (PdfException ex)
+        {
+            Assert.Equal(PdfiumError.Format, ex.Error); // unrecoverable: a clean, specific error
+        }
+    }
+
+    [Fact]
+    public void RenderPage_GarbageContentStream_DoesNotThrow()
+    {
+        // Valid structure, nonsense drawing operators: PDFium skips what it can't parse.
+        byte[] pdf = TestPdf.Create();
+        string text = System.Text.Encoding.Latin1.GetString(pdf)
+            .Replace("0 0 0 rg 100 100 200 200 re f", "q Q ]] << >> 12 Tf BT ET ((( rg zz Do"[..29]);
+        using var doc = PdfDocument.Open(WriteBytes(System.Text.Encoding.Latin1.GetBytes(text)));
+        IntPtr buffer = Marshal.AllocHGlobal(100 * 100 * 4);
+        try { doc.RenderPage(0, buffer, 100, 100, 400); }
+        finally { Marshal.FreeHGlobal(buffer); }
+        Assert.Equal(1, doc.PageCount);
+    }
+
     [Fact]
     public void GetPageSize_OutOfRange_Throws()
     {

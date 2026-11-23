@@ -27,11 +27,13 @@ public partial class MainWindow : Window
         _recent.Load();
 
         InitializeComponent();
+        if (options.StartMaximized) WindowState = WindowState.Maximized;
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel); // Ctrl shortcuts win over focused controls
         PageBox.KeyDown += OnPageBoxKeyDown;
         PageBox.LostFocus += (_, _) => UpdateToolbar();
         InitSearchBar();
+        SyncAppearanceMenu();
         UpdateUi();
     }
 
@@ -147,19 +149,34 @@ public partial class MainWindow : Window
         await OpenFilesAsync(files.Select(f => f.TryGetLocalPath()).OfType<string>());
     }
 
+    /// <summary>Opens files as tabs; failures are collected and reported together at the end.</summary>
     private async Task OpenFilesAsync(IEnumerable<string> paths)
     {
+        var errors = new List<string>();
         foreach (string path in paths.ToList())
-            await OpenFileAsync(path);
+            if (await TryOpenFileAsync(path) is { } error)
+                errors.Add(error);
+
+        if (errors.Count == 1)
+            ShowError(errors[0]);
+        else if (errors.Count > 1)
+            ShowError($"Couldn't open {errors.Count} files. " + string.Join(" ", errors));
+        else if (!IsPrinting && MessageBar.IsVisible && _messageAction is null)
+            ClearMessage(); // e.g. an earlier "cannot open" error
     }
 
-    /// <summary>Opens a file in a new tab, or switches to it if it's already open.</summary>
-    private async Task OpenFileAsync(string path)
+    private Task OpenFileAsync(string path) => OpenFilesAsync([path]);
+
+    /// <summary>
+    /// Opens a file in a new tab, or switches to it if it's already open.
+    /// Returns an error message, or null on success (or when the user cancelled a password prompt).
+    /// </summary>
+    private async Task<string?> TryOpenFileAsync(string path)
     {
         if (FindTab(path) is { } existing)
         {
             Tabs.SelectedItem = existing;
-            return;
+            return null;
         }
 
         string? password = null;
@@ -175,24 +192,22 @@ public partial class MainWindow : Window
                 });
 
                 ViewState? lastView = _recent.Find(path)?.View;
-                AddTab(new DocumentTab(_worker, document, sizes, lastView));
+                AddTab(new DocumentTab(_worker, document, sizes, lastView, App.Settings.Current.InvertPageColors));
                 if (!_options.Automated)
                 {
                     _recent.Touch(path);
                     _recent.Save();
                     RefreshRecent();
                 }
-                StatusText.Text = "";
-                return;
+                return null;
             }
             catch (PdfException ex) when (ex.Error == PdfiumError.Password && !_options.Automated)
             {
                 password = await PasswordDialog.AskAsync(this, Path.GetFileName(path), retry: password is not null);
-                if (password is null) return; // cancelled
+                if (password is null) return null; // cancelled
             }
             catch (PdfException ex)
             {
-                StatusText.Text = ex.Message;
                 if (ex.Error == PdfiumError.File && !_options.Automated)
                 {
                     _recent.Remove(path); // gone or unreadable: don't keep offering it
@@ -200,7 +215,7 @@ public partial class MainWindow : Window
                     RefreshRecent();
                 }
                 if (_options.Automated) { Console.Error.WriteLine(ex.Message); Close(); }
-                return;
+                return ex.Message;
             }
         }
     }
@@ -264,12 +279,8 @@ public partial class MainWindow : Window
                 {
                     Children =
                     {
-                        new TextBlock { Text = Path.GetFileName(entry.Path), Foreground = Brushes.White },
-                        new TextBlock
-                        {
-                            Text = Path.GetDirectoryName(entry.Path), FontSize = 11, Foreground = Brushes.Gray,
-                            TextTrimming = TextTrimming.CharacterEllipsis,
-                        },
+                        new TextBlock { Text = Path.GetFileName(entry.Path), Classes = { "name" } },
+                        new TextBlock { Text = Path.GetDirectoryName(entry.Path), Classes = { "folder" } },
                     },
                 },
             };
@@ -360,6 +371,7 @@ public partial class MainWindow : Window
         {
             case Key.F when tab is not null: ShowSearchBar(); break;
             case Key.P when tab is not null: await PrintActiveTabAsync(); break;
+            case Key.I: ToggleInvertColors(); break;
             // In a text box, Ctrl+C / Ctrl+A keep their usual meaning.
             case Key.C when !inTextBox: await CopySelectionAsync(); break;
             case Key.A when !inTextBox: tab?.Pages.SelectAllOnPage(); break;
@@ -415,12 +427,58 @@ public partial class MainWindow : Window
         if (!_options.Bench) return;
 
         _benchReported = true;
-        RequestAnimationFrame(_ => // after the frame showing the page is presented
+        RequestAnimationFrame(async _ => // after the frame showing the page is presented
         {
             double ms = (DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds;
             Console.WriteLine($"startup_to_first_page_ms={ms:F0}");
+            if (_options.BenchScrollPages > 0)
+                await ScrollBenchAsync(_options.BenchScrollPages);
             Close();
         });
+    }
+
+    /// <summary>
+    /// --bench-scroll N: pages down N times at key-repeat pace, lets renders settle, then reports memory and
+    /// CPU. A repeatable stand-in for "read through a long document".
+    /// </summary>
+    private async Task ScrollBenchAsync(int pages)
+    {
+        if (ActiveTab is not { } tab) return;
+        using var self = Process.GetCurrentProcess();
+        TimeSpan cpuBefore = self.TotalProcessorTime;
+        var wall = Stopwatch.StartNew();
+
+        // Frame pacing: a chain of animation-frame callbacks records when each frame actually happens.
+        var frameTimes = new List<double>();
+        bool measuring = true;
+        void OnFrame(TimeSpan _)
+        {
+            frameTimes.Add(wall.Elapsed.TotalMilliseconds);
+            if (measuring) RequestAnimationFrame(OnFrame);
+        }
+        RequestAnimationFrame(OnFrame);
+
+        for (int i = 0; i < pages; i++)
+        {
+            tab.Scroller.PageDown();
+            await Task.Delay(50);
+        }
+        measuring = false;
+        double scrollMs = wall.Elapsed.TotalMilliseconds;
+        var gaps = frameTimes.Zip(frameTimes.Skip(1), (a, b) => b - a).Order().ToList();
+        double P(double q) => gaps.Count == 0 ? 0 : gaps[Math.Min(gaps.Count - 1, (int)(q * gaps.Count))];
+        Console.WriteLine($"frames={frameTimes.Count} fps={frameTimes.Count / (scrollMs / 1000):F0} " +
+                          $"frame_p50_ms={P(0.5):F1} frame_p95_ms={P(0.95):F1} frame_max_ms={(gaps.Count > 0 ? gaps[^1] : 0):F0}");
+        await Task.Delay(1000); // last renders
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        self.Refresh();
+        static double Mb(long bytes) => bytes / 1048576.0;
+        Console.WriteLine(
+            $"scroll_pages={pages} page_reached={tab.Pages.CurrentPage + 1} " +
+            $"cpu_ms={(self.TotalProcessorTime - cpuBefore).TotalMilliseconds:F0} wall_ms={scrollMs:F0} " +
+            $"ws_mb={Mb(self.WorkingSet64):F0} private_mb={Mb(self.PrivateMemorySize64):F0} " +
+            $"managed_mb={Mb(GC.GetTotalMemory(false)):F1} cache_mb={Mb(tab.Pages.CacheBytes):F0}");
     }
 
     protected override void OnClosed(EventArgs e)

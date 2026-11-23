@@ -8,25 +8,25 @@ namespace LightPdf.App;
 /// <summary>The content of one tab: a scrollable page view that owns one open document.</summary>
 internal sealed class DocumentTab : UserControl
 {
-    private static readonly IBrush Backdrop = new SolidColorBrush(Color.FromRgb(0x3a, 0x3a, 0x3a));
-
-    public DocumentTab(PdfWorker worker, PdfDocument document, PageSize[] pageSizes, ViewState? initialView)
+    public DocumentTab(PdfWorker worker, PdfDocument document, PageSize[] pageSizes, ViewState? initialView, bool invertColors)
     {
         Document = document;
         Pages = new PdfPagesView
         {
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
+            InvertColors = invertColors,
         };
         Scroller = new ScrollViewer
         {
-            Background = Backdrop,
             Focusable = true,
             FocusAdorner = null,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = Pages,
         };
+        // Theme-aware backdrop: follows light/dark switches live.
+        Scroller.Bind(BackgroundProperty, Scroller.GetResourceObservable("ViewerBackdrop"));
         Content = Scroller;
         Pages.SetDocument(worker, document, pageSizes, initialView);
     }

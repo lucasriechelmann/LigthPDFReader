@@ -5,7 +5,9 @@ A fast, minimal PDF reader for Windows. No accounts, no cloud, no upsell pop-ups
 ## Goals
 
 - **Opens instantly.** Target: under 300 ms cold start to the first visible page on a typical file.
+  *Result: ~260–300 ms (GPU rendering; ~115 ms is possible with software rendering, at the cost of smooth full-screen scrolling).*
 - **Small.** A single self-contained exe of about 30–40 MB (including `pdfium.dll`). No prerequisites.
+  *Result: 43.9 MB unpacked (the GPU and text-shaping libraries are ~18 MB of it); 14.7 MB installer, 18.9 MB zip.*
 - **Does only what's needed:** view, scroll, zoom, tabs, search, copy text, print, and open on double-click.
 
 ## Non-goals (deliberately left out)
@@ -145,6 +147,30 @@ Keeping `Core` free of UI types makes the engine testable, and lets us swap UI f
 - Error handling for corrupt or unsupported files
 - Startup and memory profiling against the targets above
 - Portable zip, plus an optional tiny installer (Inno Setup)
+
+**M6 results (2026-11-23), done (v1.0.0):**
+- Themes: follows Windows by default, or forced Light/Dark (⋮ menu), applied live; app colors moved to light/dark resource dictionaries
+- Night reading (Ctrl+I): `ColorFilters.InvertLightness` adds 255 − 2L per channel, so white becomes black and text becomes white while hues stay (blue links turn light blue, photos aren't negatives); runs on the PDFium thread after rendering
+- `SettingsStore` (`%AppData%\LightPdf\settings.json`) on a shared AOT-safe `JsonFile` helper (also used by recent files)
+- Message bar replaces the toolbar status text: notices auto-hide, errors stay, print progress has its Cancel button; failures from a multi-file open are reported together
+- Unexpected exceptions on the UI thread are logged to `%LocalAppData%\LightPdf\errors.log` and shown instead of crashing; unobserved task and fatal errors are logged
+- Corrupt files (tests): empty and random files → clean "not a PDF" error; truncated files are repaired by PDFium or rejected cleanly; garbage drawing operators render without error
+- Profiling with `--bench-scroll N` (frame pacing, CPU, memory) and `--maximized`:
+
+  | 120 page-downs | GPU / ANGLE (kept) | Software | WGL |
+  |---|---|---|---|
+  | Startup, 1000×800 | ~300 ms | ~115 ms | ~300–380 ms |
+  | Frames, 1000×800 | 67 fps | 45 fps | 46 fps |
+  | Frames, maximized 3440 px | 65 fps | **12 fps** | 51 fps |
+  | Private memory, 1000×800 | 330 MB → **291 MB** after tuning | 130 MB | 623 MB |
+  | Private memory, maximized | 954 MB → **~650–740 MB** after tuning | 305 MB | 1030 MB |
+
+  The unexplained memory from M1/M2 was GPU textures (~2× the page cache); the managed heap is ~3 MB. GPU stays for smooth scrolling. Tuning: page cache 96 → 64 MB, and off-screen prefetch only within budget (maximized fit-width pages are ~64 MB each)
+- Release: `tools/Package.ps1` → `dist/LightPdf-1.0.0-win-x64-portable.zip` (18.9 MB) and `LightPdf-1.0.0-setup.exe` (14.7 MB, per-user Inno Setup, optional `--register`, `--unregister` on uninstall); `THIRD-PARTY-NOTICES.txt` built from real license files (PDFium + its 17 bundled libraries, Avalonia, SkiaSharp/HarfBuzzSharp and their notices, ANGLE, .NET runtime)
+- Fixed along the way: `Get-Pdfium.ps1` had copied the pdfium-binaries *build-script* license as if it were PDFium's; it now copies the archive's `licenses/` folder
+- 93 tests; AOT 43.9 MB unpacked; README added
+- Not run on this machine: the installer itself (it installs and can register file types)
+- Follow-ups: tiled rendering (memory and sharpness for huge pages); double-click word selection; auto-scroll while drag-selecting; print preview
 
 ## Risks and mitigations
 

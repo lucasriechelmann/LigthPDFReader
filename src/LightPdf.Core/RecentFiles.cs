@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace LightPdf.Core;
@@ -26,11 +25,6 @@ public sealed class RecentFilesData
     public List<RecentFile> Recent { get; set; } = [];
 }
 
-// Source-generated: no runtime reflection, so it works under Native AOT and trimming.
-[JsonSerializable(typeof(RecentFilesData))]
-[JsonSourceGenerationOptions(WriteIndented = true, UseStringEnumConverter = true)]
-internal sealed partial class RecentFilesJsonContext : JsonSerializerContext;
-
 /// <summary>
 /// Most-recently-opened files with their last view, persisted as JSON
 /// (<c>%AppData%\LightPdf\recent.json</c> by default). Not thread-safe: use from the UI thread.
@@ -45,49 +39,23 @@ public sealed class RecentFilesStore
     /// <param name="filePath">JSON file to load/save; null keeps everything in memory only.</param>
     public RecentFilesStore(string? filePath) => _filePath = filePath;
 
-    public static RecentFilesStore CreateDefault() => new(System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LightPdf", "recent.json"));
+    public static RecentFilesStore CreateDefault() => new(JsonFile.DefaultPath("recent.json"));
 
     public IReadOnlyList<RecentFile> Items => _items;
 
     /// <summary>Loads the file; a missing or corrupt file just means an empty list.</summary>
     public void Load()
     {
-        _items = [];
-        if (_filePath is null || !File.Exists(_filePath)) return;
-        try
-        {
-            using var stream = File.OpenRead(_filePath);
-            var data = JsonSerializer.Deserialize(stream, RecentFilesJsonContext.Default.RecentFilesData);
-            _items = (data?.Recent ?? [])
-                .Where(r => !string.IsNullOrWhiteSpace(r.Path))
-                .DistinctBy(r => Normalize(r.Path), StringComparer.OrdinalIgnoreCase)
-                .Take(MaxEntries)
-                .ToList();
-        }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
-        {
-            _items = [];
-        }
+        var data = JsonFile.Load(_filePath, LightPdfJsonContext.Default.RecentFilesData);
+        _items = (data?.Recent ?? [])
+            .Where(r => !string.IsNullOrWhiteSpace(r.Path))
+            .DistinctBy(r => Normalize(r.Path), StringComparer.OrdinalIgnoreCase)
+            .Take(MaxEntries)
+            .ToList();
     }
 
     /// <summary>Writes atomically (temp file + rename), so a crash never leaves half a file.</summary>
-    public void Save()
-    {
-        if (_filePath is null) return;
-        try
-        {
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_filePath)!);
-            string temp = _filePath + ".tmp";
-            using (var stream = File.Create(temp))
-                JsonSerializer.Serialize(stream, new RecentFilesData { Recent = _items }, RecentFilesJsonContext.Default.RecentFilesData);
-            File.Move(temp, _filePath, overwrite: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Losing the recent list is not worth interrupting the user for.
-        }
-    }
+    public void Save() => JsonFile.Save(_filePath, new RecentFilesData { Recent = _items }, LightPdfJsonContext.Default.RecentFilesData);
 
     public RecentFile? Find(string path)
     {

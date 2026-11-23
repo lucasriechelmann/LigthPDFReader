@@ -16,6 +16,10 @@ internal static partial class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Installer hooks: register/unregister .pdf for this exe and exit, without any UI.
+        if (args is ["--register"]) { Registration.Register(); return 0; }
+        if (args is ["--unregister"]) { Registration.Unregister(); return 0; }
+
         var options = StartupOptions.Parse(args);
 
         // One reader per session: a second launch hands its files to the first and exits right away.
@@ -49,12 +53,18 @@ internal static partial class Program
 
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<App>()
+    {
+
+        // Default GPU path (ANGLE → Direct3D). Measured in M6: software rendering starts ~170 ms faster and
+        // uses far less memory, but drops to ~12 fps when scrolling a maximized 3440 px window; WGL was worse
+        // on every measure. Smooth scrolling wins.
+        return AppBuilder.Configure<App>()
             .UsePlatformDetect()
 #if DEBUG
             .WithDeveloperTools()
 #endif
             .LogToTrace();
+    }
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
